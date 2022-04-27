@@ -49,52 +49,63 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 loss_fn = nn.CrossEntropyLoss()
 
 # Some layers, such as Dropout, behave differently during training
-for epoch in range(10):
-    correct = 0
+# Train the model for 10 epochs, iterating on the data in batches
+n_epochs = 10
+
+# store metrics
+training_accuracy_history = np.zeros([n_epochs, 1])
+training_loss_history = np.zeros([n_epochs, 1])
+validation_accuracy_history = np.zeros([n_epochs, 1])
+validation_loss_history = np.zeros([n_epochs, 1])
+
+for epoch in range(n_epochs):
+    print(f'Epoch {epoch+1}/10:', end='')
+    train_total = 0
+    train_correct = 0
+    # train
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        # Erase accumulated gradients
+    for i, data in enumerate(train_loader):
+        images, labels = data
         optimizer.zero_grad()
-
-        # Forward pass
-        output = model(data)
-
-        # Calculate loss
-        loss = loss_fn(output, target)
-
-        # Backward pass
+        # forward pass
+        output = model(images)
+        # calculate categorical cross entropy loss
+        loss = loss_fn(output, labels)
+        # backward pass
         loss.backward()
-        
-        # Weight update
         optimizer.step()
-
-        # to calculate accuracy
-        pred = output.argmax(dim=1, keepdim=True)  # Get the index of the max class score
-        correct += pred.eq(target.view_as(pred)).sum().item()
-
-    # Track loss each epoch
-    print('Train Epoch: %d  Loss: %.4f. Training Accuracy: (%.4f)' % (epoch + 1,  loss.item(), 100*correct/len(train_loader.dataset)))
-
-    # DO VALIDATION TO SEE THAT YOU ARE NOT OVERFITTING!!!
-    # Putting layers like Dropout into evaluation mode
-    model.eval()
-
-    val_loss = 0
-    correct = 0
-
-    # Turning off automatic differentiation
+        
+        # track training accuracy
+        _, predicted = torch.max(output.data, 1)
+        train_total += labels.size(0)
+        train_correct += (predicted == labels).sum().item()
+        # track training loss
+        training_loss_history[epoch] += loss.item()
+        # progress update after 180 batches (~1/10 epoch for batch size 32)
+        if i % 180 == 0: print('.',end='')
+    training_loss_history[epoch] /= len(train_loader)
+    training_accuracy_history[epoch] = train_correct / train_total
+    print(f'\n\tloss: {training_loss_history[epoch,0]:0.4f}, acc: {training_accuracy_history[epoch,0]:0.4f}',end='')
+        
+    # validate
+    test_total = 0
+    test_correct = 0
     with torch.no_grad():
-        for data, target in val_loader:
-            output = model(data)
-            val_loss += loss_fn(output, target).item()  # Sum up batch loss
-            pred = output.argmax(dim=1, keepdim=True)  # Get the index of the max class score
-            correct += pred.eq(target.view_as(pred)).sum().item()
-
-    val_loss /= len(val_loader.dataset)
-
-    print('Val set: Average loss: %.4f, Accuracy: %d/%d (%.4f)' %
-        (val_loss, correct, len(val_loader.dataset),
-        100. * correct / len(val_loader.dataset)))
+        model.eval()
+        for i, data in enumerate(val_loader):
+            images, labels = data
+            # forward pass
+            output = model(images)
+            # find accuracy
+            _, predicted = torch.max(output.data, 1)
+            test_total += labels.size(0)
+            test_correct += (predicted == labels).sum().item()
+            # find loss
+            loss = loss_fn(output, labels)
+            validation_loss_history[epoch] += loss.item()
+        validation_loss_history[epoch] /= len(val_loader)
+        validation_accuracy_history[epoch] = test_correct / test_total
+    print(f', val loss: {validation_loss_history[epoch,0]:0.4f}, val acc: {validation_accuracy_history[epoch,0]:0.4f}')
 
 if DONE_TWEAKING:
     # Putting layers like Dropout into evaluation mode
