@@ -1,0 +1,6 @@
+/data
+*.jpg
+*.pt
+*.npy
+*.png
+*.pyc
